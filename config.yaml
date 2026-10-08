@@ -1,7 +1,7 @@
 # Конфигурация сервиса мониторинга утилизации ресурсов Kubernetes
 server:
   host: "0.0.0.0"
-  port: 8088
+  port: 8080
 
 kubernetes:
   # Namespace, в котором живут поды пользователей
@@ -21,4 +21,4 @@ metrics:
   # Адрес Prometheus HTTP API. Используется, если metrics-server недоступен.
   # Пример: "http://prometheus.monitoring.svc.cluster.local:9090"
   #prometheus_url: "http://prometheus-operated.monitoring.svc.cluster.local:9090"
-  prometheus_url: "http://localhost:9999"
+  prometheus_url: "http://prometheus-operated:9090"

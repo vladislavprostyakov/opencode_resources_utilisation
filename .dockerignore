@@ -1,0 +1,12 @@
+.git
+.kube
+*.exe
+main
+build.log
+build.done
+*.tar
+*.tar.gz
+Dockerfile
+.dockerignore
+README.md
+Архитектура.rtf
