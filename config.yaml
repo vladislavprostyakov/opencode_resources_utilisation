@@ -1,0 +1,24 @@
+# Конфигурация сервиса мониторинга утилизации ресурсов Kubernetes
+server:
+  host: "0.0.0.0"
+  port: 8088
+
+kubernetes:
+  # Namespace, в котором живут поды пользователей
+  namespace: "opencode-agents"
+  # Общий префикс имён подов. Имя пользователя — второе поле имени пода
+  # по разделителю "-" (например: opencode-asmirnov-dfnx-ru-6f56465855-tbhlw -> asmirnov)
+  pod_prefix: "opencode"
+  # Путь к kubeconfig. Пустое значение: сначала пробуем in-cluster,
+  # затем ~/.kube/config
+  kubeconfig: ".kube/emias.yaml"
+
+metrics:
+  # Источник метрик: "auto" (по умолчанию), "metrics-server" или "prometheus".
+  # "auto" — определяется автоматически: сначала metrics-server (metrics.k8s.io),
+  # затем Prometheus (если указан prometheus_url).
+  source: "auto"
+  # Адрес Prometheus HTTP API. Используется, если metrics-server недоступен.
+  # Пример: "http://prometheus.monitoring.svc.cluster.local:9090"
+  #prometheus_url: "http://prometheus-operated.monitoring.svc.cluster.local:9090"
+  prometheus_url: "http://localhost:9999"
