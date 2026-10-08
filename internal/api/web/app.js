@@ -48,6 +48,33 @@ function memToMi(v) {
     K: 1e3 / 1048576, M: 1e6 / 1048576, G: 1e9 / 1048576, T: 1e12 / 1048576 }[m[2]] ?? 1;
   return num * mult;
 }
+// trimZeros — отбрасывает нулевую дробную часть: "1.00" -> "1", "1.50" -> "1.5".
+function trimZeros(s) {
+  if (!s.includes(".")) return s;
+  return s.replace(/\.?0+$/, "");
+}
+// memToGiB — значение памяти в гигабайтах: округление до 2 знаков,
+// нулевая дробная часть отбрасывается (1.00 -> 1, 1.50 -> 1.5, 1.23 -> 1.23).
+function memToGiB(v) {
+  return trimZeros((memToMi(v) / 1024).toFixed(2));
+}
+// isMemResource — байтовый ресурс (память/ephemeral), отображается в GB.
+function isMemResource(res) {
+  const r = String(res || "").toLowerCase();
+  return r.includes("memory") || r.includes("ephemeral-storage");
+}
+// cpuToCores — значение CPU в ядрах: округление до 2 знаков,
+// нулевая дробная часть отбрасывается (2.00 -> 2, 1.50 -> 1.5, 1.234 -> 1.23).
+function cpuToCores(v) {
+  if (!v) return "0 cores";
+  const m = String(v).trim().match(/^([\d.]+)\s*cores?$/);
+  if (!m) return String(v); // не распознано — оставляем как есть
+  return trimZeros(parseFloat(m[1]).toFixed(2)) + " cores";
+}
+// isCpuResource — CPU-ресурс (для квоты).
+function isCpuResource(res) {
+  return String(res || "").toLowerCase().includes("cpu");
+}
 function pctClass(p) { return p >= 90 ? "bad" : p >= 70 ? "warn" : ""; }
 function bar(p) {
   const p2 = Math.max(0, Math.min(100, p || 0));
@@ -89,6 +116,7 @@ async function loadUsers() {
       return;
     }
     userSelect.appendChild(h("option", { value: "" }, "— выберите пользователя —"));
+    userSelect.appendChild(h("option", { value: "all" }, "Все пользователи"));
     for (const u of data.users) {
       userSelect.appendChild(h("option", { value: u }, u));
     }
@@ -114,11 +142,18 @@ async function loadUser(user) {
   stopPolling();
   content.innerHTML = '<p class="muted">Загрузка данных…</p>';
   try {
-    const info = await api("/api/user/" + encodeURIComponent(user));
+    const isAll = user === "all";
+    const info = isAll
+      ? await api("/api/users/all")
+      : await api("/api/user/" + encodeURIComponent(user));
     state.user = user;
     await loadMetricsSource();
-    renderUser(info);
-    startPolling();
+    if (isAll) {
+      renderAllUsers(info);
+    } else {
+      renderUser(info);
+      startPolling();
+    }
   } catch (e) {
     content.innerHTML = "";
     content.appendChild(h("div", { class: "card" }, [h("p", { class: "error" }, "Ошибка: " + e.message)]));
@@ -135,17 +170,65 @@ function renderUser(info) {
   content.appendChild(renderPodsCard(info));
 }
 
+// ---------- render all users ----------
+function renderAllUsers(info) {
+  content.innerHTML = "";
+  content.appendChild(renderClusterCard(info.cluster));
+  content.appendChild(renderQuotaCard(info));
+  content.appendChild(renderFreeCard(info.free));
+  content.appendChild(renderTotalsCard(info.totals));
+  content.appendChild(renderUsersTable(info.users));
+}
+
+function renderFreeCard(f) {
+  if (!f) return null;
+  const srcLabel = f.source === "quota"
+    ? "от установленной квоты namespace"
+    : "от доступных ресурсов кластера";
+  return h("div", { class: "card" }, [
+    h("h2", {}, `Свободные ресурсы (${srcLabel})`),
+    h("div", { class: "grid" }, [
+      metric("Свободно CPU", f.cpu ? cpuToCores(f.cpu) : "—"),
+      metric("Свободно памяти", f.memory ? memToGiB(f.memory) + " GB" : "—"),
+      metric("Свободно ephemeral storage", f.ephemeral ? memToGiB(f.ephemeral) + " GB" : "—"),
+    ]),
+  ]);
+}
+
+function renderUsersTable(users) {
+  const card = h("div", { class: "card" }, [h("h2", {}, `Сводка по пользователям: ${users.length}`)]);
+  if (!users.length) {
+    card.appendChild(h("p", { class: "muted" }, "Пользователи не найдены."));
+    return card;
+  }
+  const rows = users.map(u => h("tr", {}, [
+    h("td", {}, u.user),
+    h("td", {}, String(u.pod_count)),
+    h("td", {}, cpuToCores(u.cpu_request)),
+    h("td", {}, cpuToCores(u.cpu_limit)),
+    h("td", {}, memToGiB(u.memory_request) + " GB"),
+    h("td", {}, memToGiB(u.memory_limit) + " GB"),
+    h("td", {}, memToGiB(u.ephemeral_storage_request) + " GB"),
+    h("td", {}, memToGiB(u.ephemeral_storage_limit) + " GB"),
+  ]));
+  card.appendChild(h("table", {}, [
+    h("thead", {}, h("tr", {}, ["Пользователь", "Подов", "CPU request", "CPU limit", "Memory request", "Memory limit", "Ephemeral request", "Ephemeral limit"].map(t => h("th", {}, t)))),
+    h("tbody", {}, rows),
+  ]));
+  return card;
+}
+
 function renderClusterCard(c) {
   if (!c) return h("div", { class: "card" }, [h("h2", {}, "Кластер"), h("p", { class: "muted" }, "Данные о кластере недоступны.")]);
   return h("div", { class: "card" }, [
     h("h2", {}, `Кластер (нод: ${c.node_count})`),
     h("div", { class: "grid" }, [
-      metric("Всего CPU (allocatable)", c.total_cpu),
-      metric("Всего памяти (allocatable)", c.total_memory),
-      metric("Зарезервировано CPU (requests)", c.requested_cpu),
-      metric("Зарезервировано память (requests)", c.requested_memory),
-      metric("Доступно CPU (после requests)", c.available_cpu),
-      metric("Доступно памяти (после requests)", c.available_memory),
+      metric("Всего CPU (allocatable)", cpuToCores(c.total_cpu)),
+      metric("Всего памяти (allocatable)", memToGiB(c.total_memory) + " GB"),
+      metric("Зарезервировано CPU (requests)", cpuToCores(c.requested_cpu)),
+      metric("Зарезервировано память (requests)", memToGiB(c.requested_memory) + " GB"),
+      metric("Доступно CPU (после requests)", cpuToCores(c.available_cpu)),
+      metric("Доступно памяти (после requests)", memToGiB(c.available_memory) + " GB"),
     ]),
   ]);
 }
@@ -165,13 +248,18 @@ function renderQuotaCard(info) {
     card.appendChild(h("p", { class: "muted" }, "Квота для namespace не установлена."));
     return card;
   }
-  const rows = q.items.map(it => h("tr", {}, [
-    h("td", {}, it.resource),
-    h("td", {}, it.limit),
-    h("td", {}, it.used),
-    h("td", {}, it.remaining),
-    h("td", {}, [h("div", {}, `${(it.utilization_pct || 0).toFixed(1)}%`), bar(it.utilization_pct)]),
-  ]));
+  const rows = q.items.map(it => {
+    const mem = isMemResource(it.resource);
+    const cpu = isCpuResource(it.resource);
+    const fmt = (v) => (mem ? memToGiB(v) + " GB" : cpu ? cpuToCores(v) : v);
+    return h("tr", {}, [
+      h("td", {}, it.resource),
+      h("td", {}, fmt(it.limit)),
+      h("td", {}, fmt(it.used)),
+      h("td", {}, fmt(it.remaining)),
+      h("td", {}, [h("div", {}, `${(it.utilization_pct || 0).toFixed(1)}%`), bar(it.utilization_pct)]),
+    ]);
+  });
   card.appendChild(h("table", {}, [
     h("thead", {}, h("tr", {}, ["Ресурс", "Лимит", "Использовано", "Осталось", "Утилизация"].map(t => h("th", {}, t)))),
     h("tbody", {}, rows),
@@ -183,7 +271,7 @@ function renderQuotaCard(info) {
     h("td", {}, `${p.toFixed(1)}%`),
     h("td", {}, [bar(p)]),
   ]));
-  if (userRows.length) {
+  if (userRows.length && info.user) {
     card.appendChild(h("h3", {}, `Утилизация квоты пользователем «${info.user}»`));
     card.appendChild(h("table", {}, [
       h("thead", {}, h("tr", {}, ["Ресурс", "Доля пользователя", ""].map(t => h("th", {}, t)))),
@@ -197,12 +285,12 @@ function renderTotalsCard(t) {
   return h("div", { class: "card" }, [
     h("h2", {}, `Суммарно по подам пользователя (подов: ${t.pod_count})`),
     h("div", { class: "grid" }, [
-      metric("Memory request", t.memory_request),
-      metric("Memory limit", t.memory_limit),
-      metric("CPU request", t.cpu_request),
-      metric("CPU limit", t.cpu_limit),
-      metric("Ephemeral Storage request", t.ephemeral_storage_request),
-      metric("Ephemeral Storage limit", t.ephemeral_storage_limit),
+      metric("Memory request", memToGiB(t.memory_request) + " GB"),
+      metric("Memory limit", memToGiB(t.memory_limit) + " GB"),
+      metric("CPU request", cpuToCores(t.cpu_request)),
+      metric("CPU limit", cpuToCores(t.cpu_limit)),
+      metric("Ephemeral Storage request", memToGiB(t.ephemeral_storage_request) + " GB"),
+      metric("Ephemeral Storage limit", memToGiB(t.ephemeral_storage_limit) + " GB"),
     ]),
   ]);
 }
@@ -216,10 +304,10 @@ function renderPVCCard(pvcs) {
   const rows = pvcs.map(p => h("tr", {}, [
     h("td", {}, p.name),
     h("td", {}, p.status),
-    h("td", {}, p.capacity || "—"),
+    h("td", {}, p.capacity ? memToGiB(p.capacity) + " GB" : "—"),
     h("td", {}, (p.access_modes || []).join(", ")),
     h("td", {}, p.storage_class || "—"),
-    h("td", {}, p.usage || "—"),
+    h("td", {}, p.usage ? memToGiB(p.usage) + " GB" : "—"),
     h("td", {}, p.utilization != null ? [`${p.utilization.toFixed(1)}%`, bar(p.utilization)] : "—"),
   ]));
   card.appendChild(h("table", {}, [
@@ -245,9 +333,9 @@ function renderPod(pod) {
   const head = h("div", { class: "pod-head", onclick: () => togglePod(pod.name) }, [
     h("span", { class: "name" }, pod.name),
     h("span", { class: `badge ${badgeClass}` }, pod.status),
-    h("span", { class: "badge" }, `CPU req/lim: ${pod.cpu_request} / ${pod.cpu_limit}`),
-    h("span", { class: "badge" }, `Mem req/lim: ${pod.memory_request} / ${pod.memory_limit}`),
-    h("span", { class: "badge" }, `Eph req/lim: ${pod.ephemeral_storage_request} / ${pod.ephemeral_storage_limit}`),
+    h("span", { class: "badge" }, `CPU req/lim: ${cpuToCores(pod.cpu_request)} / ${cpuToCores(pod.cpu_limit)}`),
+    h("span", { class: "badge" }, `Mem req/lim: ${memToGiB(pod.memory_request)} GB / ${memToGiB(pod.memory_limit)} GB`),
+    h("span", { class: "badge" }, `Eph req/lim: ${memToGiB(pod.ephemeral_storage_request)} GB / ${memToGiB(pod.ephemeral_storage_limit)} GB`),
     h("span", { class: "badge" }, `Рестарты: ${pod.restart_count}`),
   ]);
 
@@ -310,8 +398,8 @@ function renderPodCharts(pod) {
   wrap.appendChild(h("p", { class: "muted", id: `metrics-status-${pod.name}`, style: "font-size:12px;margin:4px 0" }, ""));
   const grid = h("div", { class: "charts" }, [
     chartBox(pod.name, "cpu", "CPU, millicores"),
-    chartBox(pod.name, "mem", "Память, MiB"),
-    chartBox(pod.name, "storage", "Ephemeral Storage, MiB"),
+    chartBox(pod.name, "mem", "Память, GB"),
+    chartBox(pod.name, "storage", "Ephemeral Storage, GB"),
   ]);
   wrap.appendChild(grid);
   return wrap;
@@ -370,8 +458,8 @@ async function pollPodMetrics(podName) {
       if (arr.length > 60) arr.shift();
     };
     push(c.data.cpu, cpuToM(m.cpu));
-    push(c.data.mem, memToMi(m.memory));
-    push(c.data.storage, memToMi(m.ephemeral_storage));
+    push(c.data.mem, memToMi(m.memory) / 1024);
+    push(c.data.storage, memToMi(m.ephemeral_storage) / 1024);
     updateChart(c.cpu, label, c.data.cpu);
     updateChart(c.mem, label, c.data.mem);
     updateChart(c.storage, label, c.data.storage);

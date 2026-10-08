@@ -27,6 +27,7 @@ func NewServer(c *k8s.Client) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/users", s.handleUsers)
+	mux.HandleFunc("GET /api/users/all", s.handleAllUsers)
 	mux.HandleFunc("GET /api/user/{user}", s.handleUser)
 	mux.HandleFunc("GET /api/user/{user}/pods/{pod}/metrics", s.handlePodMetrics)
 	mux.HandleFunc("GET /api/user/{user}/pods/{pod}/logs", s.handlePodLogs)
@@ -49,6 +50,15 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"users": users})
+}
+
+func (s *Server) handleAllUsers(w http.ResponseWriter, r *http.Request) {
+	info, err := s.client.GetAllUsersInfo()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, info)
 }
 
 func (s *Server) handleUser(w http.ResponseWriter, r *http.Request) {

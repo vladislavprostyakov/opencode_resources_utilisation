@@ -58,7 +58,7 @@ func (c *Client) GetUserInfo(user string) (*UserInfo, error) {
 		EphemeralLimit:   memStr(sumLimit(info.Pods, ephLimitKey)),
 	}
 
-	quota, hard := c.getNamespaceQuota()
+	quota, hard, _ := c.getNamespaceQuota()
 	info.Quota = quota
 	info.QuotaUtilizationPct = userQuotaUtilization(hard, userCPU, userMem, userEph, len(info.Pods))
 

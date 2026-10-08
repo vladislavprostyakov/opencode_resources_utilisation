@@ -10,10 +10,12 @@ import (
 )
 
 // getNamespaceQuota агрегирует квоты namespace.
-func (c *Client) getNamespaceQuota() (*NamespaceQuota, map[corev1.ResourceName]resource.Quantity) {
+// Возвращает агрегированную квоту, а также карты установленных лимитов (hard)
+// и фактически использованных ресурсов (used).
+func (c *Client) getNamespaceQuota() (*NamespaceQuota, map[corev1.ResourceName]resource.Quantity, map[corev1.ResourceName]resource.Quantity) {
 	quotas, err := c.Kube.CoreV1().ResourceQuotas(c.Namespace).List(ctx(), metav1.ListOptions{})
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	hard := map[corev1.ResourceName]resource.Quantity{}
 	used := map[corev1.ResourceName]resource.Quantity{}
@@ -49,7 +51,7 @@ func (c *Client) getNamespaceQuota() (*NamespaceQuota, map[corev1.ResourceName]r
 			Utilization: pct,
 		})
 	}
-	return nq, hard
+	return nq, hard, used
 }
 
 // userQuotaUtilization — процент использования квоты подами конкретного пользователя.

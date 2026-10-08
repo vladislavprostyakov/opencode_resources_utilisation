@@ -116,3 +116,35 @@ type UserInfo struct {
 	PVCs                []PVCInfo        `json:"pvcs"`
 	Cluster             *ClusterInfo     `json:"cluster"`
 }
+
+// FreeResources — свободные ресурсы namespace.
+// Source: "quota" — свободные считаются от установленной квоты namespace,
+// "cluster" — от общего числа доступных в кластере ресурсов.
+type FreeResources struct {
+	Source    string `json:"source"`
+	CPU       string `json:"cpu"`
+	Memory    string `json:"memory"`
+	Ephemeral string `json:"ephemeral"`
+}
+
+// UserSummary — сводка по одному пользователю.
+type UserSummary struct {
+	User             string `json:"user"`
+	PodCount         int    `json:"pod_count"`
+	CPURequest       string `json:"cpu_request"`
+	CPULimit         string `json:"cpu_limit"`
+	MemoryRequest    string `json:"memory_request"`
+	MemoryLimit      string `json:"memory_limit"`
+	EphemeralRequest string `json:"ephemeral_storage_request"`
+	EphemeralLimit   string `json:"ephemeral_storage_limit"`
+}
+
+// AllUsersInfo — сводные данные по всем пользователям namespace.
+type AllUsersInfo struct {
+	Namespace string        `json:"namespace"`
+	Cluster   *ClusterInfo  `json:"cluster"`
+	Quota     *NamespaceQuota `json:"quota"`
+	Totals    PodTotals     `json:"totals"`
+	Free      FreeResources `json:"free"`
+	Users     []UserSummary `json:"users"`
+}
