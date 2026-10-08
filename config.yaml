@@ -9,8 +9,15 @@ kubernetes:
   # Общий префикс имён подов. Имя пользователя — второе поле имени пода
   # по разделителю "-" (например: opencode-asmirnov-dfnx-ru-6f56465855-tbhlw -> asmirnov)
   pod_prefix: "opencode"
-  # Путь к kubeconfig. Пустое значение: сначала пробуем in-cluster,
-  # затем ~/.kube/config
+  # Режим аутентификации к API Kubernetes:
+  #   kubeconfig   (по умолчанию) — подключение по kubeconfig-файлу
+  #                  (см. kubeconfig ниже; если пусто — ~/.kube/config);
+  #   in-cluster   — использование токена serviceaccount, примонтированного
+  #                  в pod (сервис работает внутри кластера).
+  #                  Альтернативное значение: "serviceaccount".
+  auth_mode: "kubeconfig"
+  # Путь к kubeconfig. Используется, когда auth_mode: kubeconfig.
+  # Пустое значение: сначала пробуем in-cluster, затем ~/.kube/config
   kubeconfig: ".kube/emias.yaml"
 
 metrics:

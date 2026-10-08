@@ -36,6 +36,13 @@ type KubernetesConfig struct {
 	Namespace  string `yaml:"namespace"`
 	PodPrefix  string `yaml:"pod_prefix"`
 	Kubeconfig string `yaml:"kubeconfig"`
+	// AuthMode — режим аутентификации к API Kubernetes:
+	//   "kubeconfig" (по умолчанию) — подключение по kubeconfig-файлу
+	//     (kubernetes.kubeconfig, либо ~/.kube/config, либо in-cluster как
+	//     последний вариант);
+	//   "in-cluster" (или "serviceaccount") — использование токена
+	//     serviceaccount, примонтированного в pod (сервис работает в кластере).
+	AuthMode string `yaml:"auth_mode"`
 }
 
 // Load читает и валидирует конфигурацию из файла.
@@ -62,6 +69,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Metrics.Source == "" {
 		cfg.Metrics.Source = "auto"
+	}
+	if cfg.Kubernetes.AuthMode == "" {
+		cfg.Kubernetes.AuthMode = "kubeconfig"
 	}
 	return cfg, nil
 }

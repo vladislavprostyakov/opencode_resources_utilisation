@@ -55,13 +55,25 @@ server:
 kubernetes:
   namespace: "opencode-agents"   # namespace с подами
   pod_prefix: "opencode"         # общий префикс имён подов
-  kubeconfig: ""                 # путь к kubeconfig; пусто = in-cluster / ~/.kube/config
+  auth_mode: "kubeconfig"        # режим аутентификации: kubeconfig | in-cluster
+  kubeconfig: ""                 # путь к kubeconfig (для auth_mode: kubeconfig)
 ```
 
-Подключение к кластеру:
-- если `kubernetes.kubeconfig` задан — используется этот файл;
-- иначе сначала пробуем **in-cluster** (сервис работает внутри кластера);
-- иначе `~/.kube/config`.
+Подключение к кластеру определяется параметром `kubernetes.auth_mode`:
+
+- `kubeconfig` (по умолчанию) — подключение по kubeconfig-файлу:
+  - если `kubernetes.kubeconfig` задан — используется этот файл;
+  - иначе сначала пробуем **in-cluster** (сервис работает внутри кластера);
+  - иначе `~/.kube/config`.
+- `in-cluster` (или `serviceaccount`) — использование токена **serviceaccount**,
+  примонтированного в pod. Режим для работы сервиса внутри Kubernetes-кластера:
+  сервис получает токен из `/var/run/secrets/kubernetes.io/serviceaccount`
+  и обращается к API-серверу через `KUBERNETES_SERVICE_HOST`/`KUBERNETES_SERVICE_PORT`.
+  В этом режиме `kubernetes.kubeconfig` игнорируется.
+
+> Для работы в режиме `in-cluster` сервису нужны RBAC-права у serviceaccount
+> (get/list pods, pods/log, events, persistentvolumeclaims, resourcequotas, nodes
+> и доступ к metrics API).
 
 ## Сборка и запуск
 

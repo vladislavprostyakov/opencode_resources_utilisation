@@ -26,6 +26,7 @@ func main() {
 		PodPrefix:     cfg.Kubernetes.PodPrefix,
 		PrometheusURL: cfg.Metrics.PrometheusURL,
 		MetricsSource: cfg.Metrics.Source,
+		AuthMode:      cfg.Kubernetes.AuthMode,
 	})
 	if err != nil {
 		log.Fatalf("инициализация k8s клиента: %v", err)
