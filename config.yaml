@@ -15,7 +15,7 @@ kubernetes:
   #   in-cluster   — использование токена serviceaccount, примонтированного
   #                  в pod (сервис работает внутри кластера).
   #                  Альтернативное значение: "serviceaccount".
-  auth_mode: "kubeconfig"
+  auth_mode: "in-cluster"
   # Путь к kubeconfig. Используется, когда auth_mode: kubeconfig.
   # Пустое значение: сначала пробуем in-cluster, затем ~/.kube/config
   kubeconfig: ".kube/emias.yaml"
